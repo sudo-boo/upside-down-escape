@@ -6,6 +6,8 @@ A real-time, server-authoritative cooperative game built with Python (asyncio, w
 
 ### 1. Init Everything
 
+Recommended Python versions 3.10 - 3.13.
+
 ```bash
 python -m venv venv
 
