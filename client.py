@@ -50,6 +50,8 @@ class GameClient:
         
         self.state_buffer = [] 
         self.incoming_packet_queue = []
+        
+        # CHANGED: Persistent state for Event-Driven Input
         self.current_inputs = {"up": False, "down": False, "left": False, "right": False}
 
         # Fonts
@@ -168,17 +170,42 @@ class GameClient:
             pygame.draw.line(self.screen, COLOR_MONSTER_AURA, (cx, cy), (ex, ey), 2)
 
     async def game_loop(self, websocket):
+        # We track input changes to send only when necessary
+        last_sent_inputs = self.current_inputs.copy()
+
         while self.running:
+            # 1. ROBUST EVENT HANDLING (Fixes Windows Input)
             for event in pygame.event.get():
-                if event.type == pygame.QUIT: self.running = False
-            
-            keys = pygame.key.get_pressed()
-            inputs = {"up": keys[pygame.K_UP], "down": keys[pygame.K_DOWN],
-                      "left": keys[pygame.K_LEFT], "right": keys[pygame.K_RIGHT]}
-            
-            if inputs != self.current_inputs:
-                self.current_inputs = inputs
-                try: await websocket.send(json.dumps({"type": "input", "inputs": inputs}))
+                if event.type == pygame.QUIT:
+                    self.running = False
+                
+                # Update state on Key Down
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_UP or event.key == pygame.K_w:
+                        self.current_inputs["up"] = True
+                    if event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                        self.current_inputs["down"] = True
+                    if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                        self.current_inputs["left"] = True
+                    if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                        self.current_inputs["right"] = True
+                
+                # Update state on Key Up
+                if event.type == pygame.KEYUP:
+                    if event.key == pygame.K_UP or event.key == pygame.K_w:
+                        self.current_inputs["up"] = False
+                    if event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                        self.current_inputs["down"] = False
+                    if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                        self.current_inputs["left"] = False
+                    if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                        self.current_inputs["right"] = False
+
+            # 2. Network Sync (Send inputs if changed)
+            if self.current_inputs != last_sent_inputs:
+                last_sent_inputs = self.current_inputs.copy()
+                try: 
+                    await websocket.send(json.dumps({"type": "input", "inputs": self.current_inputs}))
                 except: pass
 
             self.process_packets()
